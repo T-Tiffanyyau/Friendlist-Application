@@ -13,22 +13,23 @@
 #include "more_string.h"
 
 static void doit(int fd);
-static char* ok_header(size_t len, const char* content_type);
-static dictionary_t* read_requesthdrs(rio_t* rp);
-static void read_postquery(rio_t* rp, dictionary_t* headers, dictionary_t* d);
-static void clienterror(int fd, char* cause, char* errnum,
-  char* shortmsg, char* longmsg);
-static void print_stringdictionary(dictionary_t* d);
-static void serve_request(int fd, dictionary_t* query);
-static void registerClient(dictionary_t* query, const char* user);
-static void getFriends(int fd, dictionary_t* query);
-static void beFriends(int fd, dictionary_t* query);
+static char *ok_header(size_t len, const char *content_type);
+static dictionary_t *read_requesthdrs(rio_t *rp);
+static void read_postquery(rio_t *rp, dictionary_t *headers, dictionary_t *d);
+static void clienterror(int fd, char *cause, char *errnum,
+                        char *shortmsg, char *longmsg);
+static void print_stringdictionary(dictionary_t *d);
+static void serve_request(int fd, dictionary_t *query);
+static void registerClient(dictionary_t *query, const char *user);
+static void getFriends(int fd, dictionary_t *query);
+static void beFriends(int fd, dictionary_t *query);
+static void unFriend(int fd, dictionary_t *query);
 
 pthread_mutex_t mutex;
-static dictionary_t* AllClients;
-void* thread_client(void* args);
+static dictionary_t *AllClients;
+void *thread_client(void *args);
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int listenfd, connfd;
   char hostname[MAXLINE], port[MAXLINE];
@@ -38,7 +39,8 @@ int main(int argc, char** argv)
   pthread_mutex_init(&mutex, NULL);
 
   /* Check command line args */
-  if (argc != 2) {
+  if (argc != 2)
+  {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
   }
@@ -53,15 +55,17 @@ int main(int argc, char** argv)
   /* Also, don't stop on broken connections: */
   Signal(SIGPIPE, SIG_IGN);
 
-  while (1) {
+  while (1)
+  {
     pthread_t tid;
     clientlen = sizeof(clientaddr);
-    connfd = Accept(listenfd, (SA*)&clientaddr, &clientlen);
-    if (connfd >= 0) {
-      Getnameinfo((SA*)&clientaddr, clientlen, hostname, MAXLINE,
-        port, MAXLINE, 0);
+    connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+    if (connfd >= 0)
+    {
+      Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
+                  port, MAXLINE, 0);
       printf("Accepted connection from (%s, %s)\n", hostname, port);
-      int* arg = malloc(sizeof(int));
+      int *arg = malloc(sizeof(int));
       *arg = connfd;
       pthread_create(&tid, NULL, thread_client, arg);
       pthread_detach(tid);
@@ -69,9 +73,9 @@ int main(int argc, char** argv)
   }
 }
 
-void* thread_client(void* args)
+void *thread_client(void *args)
 {
-  int connfd = *((int*)args);
+  int connfd = *((int *)args);
   free(args);
   doit(connfd);
   return NULL;
@@ -82,9 +86,9 @@ void* thread_client(void* args)
  */
 void doit(int fd)
 {
-  char buf[MAXLINE], * method, * uri, * version;
+  char buf[MAXLINE], *method, *uri, *version;
   rio_t rio;
-  dictionary_t* headers, * query;
+  dictionary_t *headers, *query;
 
   /* Read request line and headers */
   Rio_readinitb(&rio, fd);
@@ -92,22 +96,25 @@ void doit(int fd)
     return;
   printf("%s", buf);
 
-  if (!parse_request_line(buf, &method, &uri, &version)) {
+  if (!parse_request_line(buf, &method, &uri, &version))
+  {
     clienterror(fd, method, "400", "Bad Request",
-      "Friendlist did not recognize the request");
+                "Friendlist did not recognize the request");
   }
-  else {
-    if (strcasecmp(version, "HTTP/1.0")
-      && strcasecmp(version, "HTTP/1.1")) {
+  else
+  {
+    if (strcasecmp(version, "HTTP/1.0") && strcasecmp(version, "HTTP/1.1"))
+    {
       clienterror(fd, version, "501", "Not Implemented",
-        "Friendlist does not implement that version");
+                  "Friendlist does not implement that version");
     }
-    else if (strcasecmp(method, "GET")
-      && strcasecmp(method, "POST")) {
+    else if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
+    {
       clienterror(fd, method, "501", "Not Implemented",
-        "Friendlist does not implement that method");
+                  "Friendlist does not implement that method");
     }
-    else {
+    else
+    {
       headers = read_requesthdrs(&rio);
 
       /* Parse all query arguments into a dictionary */
@@ -123,11 +130,17 @@ void doit(int fd)
          but the intial implementation always returns
          nothing: */
 
-      if (starts_with("/friends", uri)) {
+      if (starts_with("/friends", uri))
+      {
         getFriends(fd, query);
       }
-      else if (starts_with("/befriend", uri)) {
+      else if (starts_with("/befriend", uri))
+      {
         beFriends(fd, query);
+      }
+      else if (starts_with("/unfriend", uri))
+      {
+        unFriend(fd, query);
       }
       else
       {
@@ -148,12 +161,12 @@ void doit(int fd)
   }
 }
 
-static void getFriends(int fd, dictionary_t* query)
+static void getFriends(int fd, dictionary_t *query)
 {
   size_t len;
-  char* body, * header;
-  char* user;
-  dictionary_t* user_Friends_Dictionary;
+  char *body, *header;
+  char *user;
+  dictionary_t *user_Friends_Dictionary;
   user = dictionary_get(query, "user");
 
   user_Friends_Dictionary = dictionary_get(AllClients, user);
@@ -161,7 +174,7 @@ static void getFriends(int fd, dictionary_t* query)
   if (user_Friends_Dictionary == NULL)
   {
     // Send an error response
-    char* error_message = "User not found";
+    char *error_message = "User not found";
     len = strlen(error_message);
     header = ok_header(len, "text/html; charset=utf-8");
     Rio_writen(fd, header, strlen(header));
@@ -189,29 +202,29 @@ static void getFriends(int fd, dictionary_t* query)
   free(body);
 }
 
-static void beFriends(int fd, dictionary_t* query)
+static void beFriends(int fd, dictionary_t *query)
 {
-  const char* user;
-  char* friends;
+  const char *user;
+  char *friends;
   user = dictionary_get(query, "user");
   friends = dictionary_get(query, "friends");
-  char** friends_array = split_string(friends, '\n');
+  char **friends_array = split_string(friends, '\n');
 
   pthread_mutex_lock(&mutex);
   // if the user is not registered in the dictionary
   registerClient(AllClients, user);
-  dictionary_t* user_Friends = dictionary_get(AllClients, user);
+  dictionary_t *user_Friends = dictionary_get(AllClients, user);
 
   int count = 0;
   while (friends_array[count] != NULL)
   {
-    const char* current_Friend = friends_array[count];
+    const char *current_Friend = friends_array[count];
     dictionary_set(user_Friends, current_Friend, NULL);
 
     // if the friend is not registered in the dictionary
     registerClient(AllClients, current_Friend);
 
-    dictionary_t* friend_Friends = dictionary_get(AllClients, current_Friend);
+    dictionary_t *friend_Friends = dictionary_get(AllClients, current_Friend);
     dictionary_set(friend_Friends, user, NULL);
 
     count++;
@@ -220,7 +233,39 @@ static void beFriends(int fd, dictionary_t* query)
   pthread_mutex_unlock(&mutex);
 }
 
-static void registerClient(dictionary_t* query, const char* user)
+static void unFriend(int fd, dictionary_t *query)
+{
+  const char *user;
+  char *friends;
+  user = dictionary_get(query, "user");
+  friends = dictionary_get(query, "friends");
+  char **friends_array = split_string(friends, '\n');
+
+  pthread_mutex_lock(&mutex);
+  dictionary_t *user_Friends = dictionary_get(AllClients, user);
+  int count = 0;
+  while (friends_array[count] != NULL)
+  {
+    const char *current_Friend = friends_array[count];
+    for (int i = 0; i < dictionary_count(user_Friends); i++)
+    {
+      if (strcmp(dictionary_key(user_Friends, i), current_Friend) == 0)
+      {
+        dictionary_remove(user_Friends, current_Friend);
+
+        dictionary_t *friend_Friends = dictionary_get(AllClients, current_Friend);
+        dictionary_remove(friend_Friends, user);
+      }
+    }
+
+    count++;
+  }
+
+  getFriends(fd, query);
+  pthread_mutex_unlock(&mutex);
+}
+
+static void registerClient(dictionary_t *query, const char *user)
 {
   if (dictionary_get(query, user) == NULL)
   {
@@ -231,14 +276,15 @@ static void registerClient(dictionary_t* query, const char* user)
 /*
  * read_requesthdrs - read HTTP request headers
  */
-dictionary_t* read_requesthdrs(rio_t* rp)
+dictionary_t *read_requesthdrs(rio_t *rp)
 {
   char buf[MAXLINE];
-  dictionary_t* d = make_dictionary(COMPARE_CASE_INSENS, free);
+  dictionary_t *d = make_dictionary(COMPARE_CASE_INSENS, free);
 
   Rio_readlineb(rp, buf, MAXLINE);
   printf("%s", buf);
-  while (strcmp(buf, "\r\n")) {
+  while (strcmp(buf, "\r\n"))
+  {
     Rio_readlineb(rp, buf, MAXLINE);
     printf("%s", buf);
     parse_header_line(buf, d);
@@ -247,9 +293,9 @@ dictionary_t* read_requesthdrs(rio_t* rp)
   return d;
 }
 
-void read_postquery(rio_t* rp, dictionary_t* headers, dictionary_t* dest)
+void read_postquery(rio_t *rp, dictionary_t *headers, dictionary_t *dest)
 {
-  char* len_str, * type, * buffer;
+  char *len_str, *type, *buffer;
   int len;
 
   len_str = dictionary_get(headers, "Content-Length");
@@ -261,22 +307,24 @@ void read_postquery(rio_t* rp, dictionary_t* headers, dictionary_t* dest)
   Rio_readnb(rp, buffer, len);
   buffer[len] = 0;
 
-  if (!strcasecmp(type, "application/x-www-form-urlencoded")) {
+  if (!strcasecmp(type, "application/x-www-form-urlencoded"))
+  {
     parse_query(buffer, dest);
   }
 
   free(buffer);
 }
 
-static char* ok_header(size_t len, const char* content_type) {
-  char* len_str, * header;
+static char *ok_header(size_t len, const char *content_type)
+{
+  char *len_str, *header;
 
   header = append_strings("HTTP/1.0 200 OK\r\n",
-    "Server: Friendlist Web Server\r\n",
-    "Connection: close\r\n",
-    "Content-length: ", len_str = to_string(len), "\r\n",
-    "Content-type: ", content_type, "\r\n\r\n",
-    NULL);
+                          "Server: Friendlist Web Server\r\n",
+                          "Connection: close\r\n",
+                          "Content-length: ", len_str = to_string(len), "\r\n",
+                          "Content-type: ", content_type, "\r\n\r\n",
+                          NULL);
   free(len_str);
 
   return header;
@@ -285,10 +333,10 @@ static char* ok_header(size_t len, const char* content_type) {
 /*
  * serve_request - example request handler
  */
-static void serve_request(int fd, dictionary_t* query)
+static void serve_request(int fd, dictionary_t *query)
 {
   size_t len;
-  char* body, * header;
+  char *body, *header;
 
   body = strdup("alice\nbob");
 
@@ -311,25 +359,27 @@ static void serve_request(int fd, dictionary_t* query)
 /*
  * clienterror - returns an error message to the client
  */
-void clienterror(int fd, char* cause, char* errnum,
-  char* shortmsg, char* longmsg)
+void clienterror(int fd, char *cause, char *errnum,
+                 char *shortmsg, char *longmsg)
 {
   size_t len;
-  char* header, * body, * len_str;
+  char *header, *body, *len_str;
 
   body = append_strings("<html><title>Friendlist Error</title>",
-    "<body bgcolor=""ffffff"">\r\n",
-    errnum, " ", shortmsg,
-    "<p>", longmsg, ": ", cause,
-    "<hr><em>Friendlist Server</em>\r\n",
-    NULL);
+                        "<body bgcolor="
+                        "ffffff"
+                        ">\r\n",
+                        errnum, " ", shortmsg,
+                        "<p>", longmsg, ": ", cause,
+                        "<hr><em>Friendlist Server</em>\r\n",
+                        NULL);
   len = strlen(body);
 
   /* Print the HTTP response */
   header = append_strings("HTTP/1.0 ", errnum, " ", shortmsg, "\r\n",
-    "Content-type: text/html; charset=utf-8\r\n",
-    "Content-length: ", len_str = to_string(len), "\r\n\r\n",
-    NULL);
+                          "Content-type: text/html; charset=utf-8\r\n",
+                          "Content-length: ", len_str = to_string(len), "\r\n\r\n",
+                          NULL);
   free(len_str);
 
   Rio_writen(fd, header, strlen(header));
@@ -339,15 +389,16 @@ void clienterror(int fd, char* cause, char* errnum,
   free(body);
 }
 
-static void print_stringdictionary(dictionary_t* d)
+static void print_stringdictionary(dictionary_t *d)
 {
   int i, count;
 
   count = dictionary_count(d);
-  for (i = 0; i < count; i++) {
+  for (i = 0; i < count; i++)
+  {
     printf("%s=%s\n",
-      dictionary_key(d, i),
-      (const char*)dictionary_value(d, i));
+           dictionary_key(d, i),
+           (const char *)dictionary_value(d, i));
   }
   printf("\n");
 }
