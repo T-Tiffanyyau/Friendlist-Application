@@ -2,7 +2,7 @@
  * friendlist.c - [Starting code for] a web-based friend-graph manager.
  *
  * Based on:
- *  tiny.c - A simple, iterative HTTP/1.0 Web server that uses the 
+ *  tiny.c - A simple, iterative HTTP/1.0 Web server that uses the
  *      GET method to serve static and dynamic content.
  *   Tiny Web server
  *   Dave O'Hallaron
@@ -13,14 +13,14 @@
 #include "more_string.h"
 
 static void doit(int fd);
-static dictionary_t *read_requesthdrs(rio_t *rp);
-static void read_postquery(rio_t *rp, dictionary_t *headers, dictionary_t *d);
-static void clienterror(int fd, char *cause, char *errnum, 
-                        char *shortmsg, char *longmsg);
-static void print_stringdictionary(dictionary_t *d);
-static void serve_request(int fd, dictionary_t *query);
+static dictionary_t* read_requesthdrs(rio_t* rp);
+static void read_postquery(rio_t* rp, dictionary_t* headers, dictionary_t* d);
+static void clienterror(int fd, char* cause, char* errnum,
+  char* shortmsg, char* longmsg);
+static void print_stringdictionary(dictionary_t* d);
+static void serve_request(int fd, dictionary_t* query);
 
-int main(int argc, char **argv) 
+int main(int argc, char** argv)
 {
   int listenfd, connfd;
   char hostname[MAXLINE], port[MAXLINE];
@@ -45,10 +45,10 @@ int main(int argc, char **argv)
 
   while (1) {
     clientlen = sizeof(clientaddr);
-    connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+    connfd = Accept(listenfd, (SA*)&clientaddr, &clientlen);
     if (connfd >= 0) {
-      Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, 
-                  port, MAXLINE, 0);
+      Getnameinfo((SA*)&clientaddr, clientlen, hostname, MAXLINE,
+        port, MAXLINE, 0);
       printf("Accepted connection from (%s, %s)\n", hostname, port);
       doit(connfd);
       Close(connfd);
@@ -59,31 +59,34 @@ int main(int argc, char **argv)
 /*
  * doit - handle one HTTP request/response transaction
  */
-void doit(int fd) 
+void doit(int fd)
 {
-  char buf[MAXLINE], *method, *uri, *version;
+  char buf[MAXLINE], * method, * uri, * version;
   rio_t rio;
-  dictionary_t *headers, *query;
+  dictionary_t* headers, * query;
 
   /* Read request line and headers */
   Rio_readinitb(&rio, fd);
   if (Rio_readlineb(&rio, buf, MAXLINE) <= 0)
     return;
   printf("%s", buf);
-  
+
   if (!parse_request_line(buf, &method, &uri, &version)) {
     clienterror(fd, method, "400", "Bad Request",
-                "Friendlist did not recognize the request");
-  } else {
+      "Friendlist did not recognize the request");
+  }
+  else {
     if (strcasecmp(version, "HTTP/1.0")
-        && strcasecmp(version, "HTTP/1.1")) {
+      && strcasecmp(version, "HTTP/1.1")) {
       clienterror(fd, version, "501", "Not Implemented",
-                  "Friendlist does not implement that version");
-    } else if (strcasecmp(method, "GET")
-               && strcasecmp(method, "POST")) {
+        "Friendlist does not implement that version");
+    }
+    else if (strcasecmp(method, "GET")
+      && strcasecmp(method, "POST")) {
       clienterror(fd, method, "501", "Not Implemented",
-                  "Friendlist does not implement that method");
-    } else {
+        "Friendlist does not implement that method");
+    }
+    else {
       headers = read_requesthdrs(&rio);
 
       /* Parse all query arguments into a dictionary */
@@ -98,7 +101,17 @@ void doit(int fd)
       /* You'll want to handle different queries here,
          but the intial implementation always returns
          nothing: */
-      serve_request(fd, query);
+
+      if (starts_with("/friends", uri)) {
+        getFriends(fd, query);
+      }
+      else if (starts_with("/befriends", uri)) {
+        beFriends(fd, query);
+      }
+      else
+      {
+        serve_request(fd, query);
+      }
 
       /* Clean up */
       free_dictionary(query);
@@ -115,33 +128,33 @@ void doit(int fd)
 /*
  * read_requesthdrs - read HTTP request headers
  */
-dictionary_t *read_requesthdrs(rio_t *rp) 
+dictionary_t* read_requesthdrs(rio_t* rp)
 {
   char buf[MAXLINE];
-  dictionary_t *d = make_dictionary(COMPARE_CASE_INSENS, free);
+  dictionary_t* d = make_dictionary(COMPARE_CASE_INSENS, free);
 
   Rio_readlineb(rp, buf, MAXLINE);
   printf("%s", buf);
-  while(strcmp(buf, "\r\n")) {
+  while (strcmp(buf, "\r\n")) {
     Rio_readlineb(rp, buf, MAXLINE);
     printf("%s", buf);
     parse_header_line(buf, d);
   }
-  
+
   return d;
 }
 
-void read_postquery(rio_t *rp, dictionary_t *headers, dictionary_t *dest)
+void read_postquery(rio_t* rp, dictionary_t* headers, dictionary_t* dest)
 {
-  char *len_str, *type, *buffer;
+  char* len_str, * type, * buffer;
   int len;
-  
+
   len_str = dictionary_get(headers, "Content-Length");
   len = (len_str ? atoi(len_str) : 0);
 
   type = dictionary_get(headers, "Content-Type");
-  
-  buffer = malloc(len+1);
+
+  buffer = malloc(len + 1);
   Rio_readnb(rp, buffer, len);
   buffer[len] = 0;
 
@@ -152,15 +165,15 @@ void read_postquery(rio_t *rp, dictionary_t *headers, dictionary_t *dest)
   free(buffer);
 }
 
-static char *ok_header(size_t len, const char *content_type) {
-  char *len_str, *header;
-  
+static char* ok_header(size_t len, const char* content_type) {
+  char* len_str, * header;
+
   header = append_strings("HTTP/1.0 200 OK\r\n",
-                          "Server: Friendlist Web Server\r\n",
-                          "Connection: close\r\n",
-                          "Content-length: ", len_str = to_string(len), "\r\n",
-                          "Content-type: ", content_type, "\r\n\r\n",
-                          NULL);
+    "Server: Friendlist Web Server\r\n",
+    "Connection: close\r\n",
+    "Content-length: ", len_str = to_string(len), "\r\n",
+    "Content-type: ", content_type, "\r\n\r\n",
+    NULL);
   free(len_str);
 
   return header;
@@ -169,10 +182,10 @@ static char *ok_header(size_t len, const char *content_type) {
 /*
  * serve_request - example request handler
  */
-static void serve_request(int fd, dictionary_t *query)
+static void serve_request(int fd, dictionary_t* query)
 {
   size_t len;
-  char *body, *header;
+  char* body, * header;
 
   body = strdup("alice\nbob");
 
@@ -195,27 +208,27 @@ static void serve_request(int fd, dictionary_t *query)
 /*
  * clienterror - returns an error message to the client
  */
-void clienterror(int fd, char *cause, char *errnum, 
-		 char *shortmsg, char *longmsg) 
+void clienterror(int fd, char* cause, char* errnum,
+  char* shortmsg, char* longmsg)
 {
   size_t len;
-  char *header, *body, *len_str;
+  char* header, * body, * len_str;
 
   body = append_strings("<html><title>Friendlist Error</title>",
-                        "<body bgcolor=""ffffff"">\r\n",
-                        errnum, " ", shortmsg,
-                        "<p>", longmsg, ": ", cause,
-                        "<hr><em>Friendlist Server</em>\r\n",
-                        NULL);
+    "<body bgcolor=""ffffff"">\r\n",
+    errnum, " ", shortmsg,
+    "<p>", longmsg, ": ", cause,
+    "<hr><em>Friendlist Server</em>\r\n",
+    NULL);
   len = strlen(body);
 
   /* Print the HTTP response */
   header = append_strings("HTTP/1.0 ", errnum, " ", shortmsg, "\r\n",
-                          "Content-type: text/html; charset=utf-8\r\n",
-                          "Content-length: ", len_str = to_string(len), "\r\n\r\n",
-                          NULL);
+    "Content-type: text/html; charset=utf-8\r\n",
+    "Content-length: ", len_str = to_string(len), "\r\n\r\n",
+    NULL);
   free(len_str);
-  
+
   Rio_writen(fd, header, strlen(header));
   Rio_writen(fd, body, len);
 
@@ -223,15 +236,15 @@ void clienterror(int fd, char *cause, char *errnum,
   free(body);
 }
 
-static void print_stringdictionary(dictionary_t *d)
+static void print_stringdictionary(dictionary_t* d)
 {
   int i, count;
 
   count = dictionary_count(d);
   for (i = 0; i < count; i++) {
     printf("%s=%s\n",
-           dictionary_key(d, i),
-           (const char *)dictionary_value(d, i));
+      dictionary_key(d, i),
+      (const char*)dictionary_value(d, i));
   }
   printf("\n");
 }
