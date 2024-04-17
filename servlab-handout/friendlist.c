@@ -13,6 +13,7 @@
 #include "more_string.h"
 
 static void doit(int fd);
+static char* ok_header(size_t len, const char* content_type);
 static dictionary_t* read_requesthdrs(rio_t* rp);
 static void read_postquery(rio_t* rp, dictionary_t* headers, dictionary_t* d);
 static void clienterror(int fd, char* cause, char* errnum,
@@ -125,7 +126,7 @@ void doit(int fd)
       if (starts_with("/friends", uri)) {
         getFriends(fd, query);
       }
-      else if (starts_with("/befriends", uri)) {
+      else if (starts_with("/befriend", uri)) {
         beFriends(fd, query);
       }
       else
@@ -142,6 +143,8 @@ void doit(int fd)
     free(method);
     free(uri);
     free(version);
+
+    close(fd);
   }
 }
 
@@ -157,7 +160,12 @@ static void getFriends(int fd, dictionary_t* query)
 
   if (user_Friends_Dictionary == NULL)
   {
-    // Handle error...
+    // Send an error response
+    char* error_message = "User not found";
+    len = strlen(error_message);
+    header = ok_header(len, "text/html; charset=utf-8");
+    Rio_writen(fd, header, strlen(header));
+    Rio_writen(fd, error_message, len);
     return;
   }
 
@@ -181,7 +189,7 @@ static void getFriends(int fd, dictionary_t* query)
   free(body);
 }
 
-static void beFriend(int fd, dictionary_t* query)
+static void beFriends(int fd, dictionary_t* query)
 {
   const char* user;
   char* friends;
