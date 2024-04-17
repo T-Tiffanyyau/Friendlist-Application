@@ -21,6 +21,7 @@ static void clienterror(int fd, char *cause, char *errnum,
 static void print_stringdictionary(dictionary_t *d);
 static void serve_request(int fd, dictionary_t *query);
 static void registerClient(dictionary_t *query, const char *user);
+static void WriteResponse(int fd, char *body);
 static void getFriends(int fd, dictionary_t *query);
 static void beFriends(int fd, dictionary_t *query);
 static void unFriend(int fd, dictionary_t *query);
@@ -163,41 +164,26 @@ void doit(int fd)
 
 static void getFriends(int fd, dictionary_t *query)
 {
-  size_t len;
-  char *body, *header;
+  char *body;
   char *user;
   dictionary_t *user_Friends_Dictionary;
   user = dictionary_get(query, "user");
 
+  pthread_mutex_lock(&mutex);
+  registerClient(AllClients, user);
   user_Friends_Dictionary = dictionary_get(AllClients, user);
 
   if (user_Friends_Dictionary == NULL)
   {
-    // Send an error response
-    char *error_message = "User not found";
-    len = strlen(error_message);
-    header = ok_header(len, "text/html; charset=utf-8");
-    Rio_writen(fd, header, strlen(header));
-    Rio_writen(fd, error_message, len);
     return;
   }
 
   print_stringdictionary(user_Friends_Dictionary);
 
   body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
+  pthread_mutex_unlock(&mutex);
 
-  len = strlen(body);
-
-  /* Send response headers to client */
-  header = ok_header(len, "text/html; charset=utf-8");
-  Rio_writen(fd, header, strlen(header));
-  printf("Response headers:\n");
-  printf("%s", header);
-
-  free(header);
-
-  /* Send response body to client */
-  Rio_writen(fd, body, len);
+  WriteResponse(fd, body);
 
   free(body);
 }
@@ -213,13 +199,13 @@ static void beFriends(int fd, dictionary_t *query)
   pthread_mutex_lock(&mutex);
   // if the user is not registered in the dictionary
   registerClient(AllClients, user);
-  dictionary_t *user_Friends = dictionary_get(AllClients, user);
+  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
 
   int count = 0;
   while (friends_array[count] != NULL)
   {
     const char *current_Friend = friends_array[count];
-    dictionary_set(user_Friends, current_Friend, NULL);
+    dictionary_set(user_Friends_Dictionary, current_Friend, NULL);
 
     // if the friend is not registered in the dictionary
     registerClient(AllClients, current_Friend);
@@ -229,8 +215,12 @@ static void beFriends(int fd, dictionary_t *query)
 
     count++;
   }
-  getFriends(fd, query);
+  char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
   pthread_mutex_unlock(&mutex);
+
+  WriteResponse(fd, body);
+
+  free(body);
 }
 
 static void unFriend(int fd, dictionary_t *query)
@@ -242,16 +232,16 @@ static void unFriend(int fd, dictionary_t *query)
   char **friends_array = split_string(friends, '\n');
 
   pthread_mutex_lock(&mutex);
-  dictionary_t *user_Friends = dictionary_get(AllClients, user);
+  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
   int count = 0;
   while (friends_array[count] != NULL)
   {
     const char *current_Friend = friends_array[count];
-    for (int i = 0; i < dictionary_count(user_Friends); i++)
+    for (int i = 0; i < dictionary_count(user_Friends_Dictionary); i++)
     {
-      if (strcmp(dictionary_key(user_Friends, i), current_Friend) == 0)
+      if (strcmp(dictionary_key(user_Friends_Dictionary, i), current_Friend) == 0)
       {
-        dictionary_remove(user_Friends, current_Friend);
+        dictionary_remove(user_Friends_Dictionary, current_Friend);
 
         dictionary_t *friend_Friends = dictionary_get(AllClients, current_Friend);
         dictionary_remove(friend_Friends, user);
@@ -261,8 +251,12 @@ static void unFriend(int fd, dictionary_t *query)
     count++;
   }
 
-  getFriends(fd, query);
+  char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
   pthread_mutex_unlock(&mutex);
+
+  WriteResponse(fd, body);
+
+  free(body);
 }
 
 static void registerClient(dictionary_t *query, const char *user)
@@ -271,6 +265,21 @@ static void registerClient(dictionary_t *query, const char *user)
   {
     dictionary_set(query, user, make_dictionary(COMPARE_CASE_SENS, free));
   }
+}
+
+static void WriteResponse(int fd, char *body)
+{
+  size_t len = strlen(body);
+  /* Send response headers to client */
+  char *header = ok_header(len, "text/html; charset=utf-8");
+  Rio_writen(fd, header, strlen(header));
+  printf("Response headers:\n");
+  printf("%s", header);
+
+  free(header);
+
+  /* Send response body to client */
+  Rio_writen(fd, body, len);
 }
 
 /*
