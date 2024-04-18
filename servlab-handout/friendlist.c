@@ -170,6 +170,9 @@ void doit(int fd)
   }
 }
 
+/**
+ * @brief Get the friends of a user
+ */
 static void getFriends(int fd, dictionary_t *query)
 {
   char *user = dictionary_get(query, "user");
@@ -190,6 +193,9 @@ static void getFriends(int fd, dictionary_t *query)
   free(body);
 }
 
+/**
+ * @brief Add friends to a user
+ */
 static void beFriends(int fd, dictionary_t *query)
 {
   const char *user;
@@ -205,6 +211,9 @@ static void beFriends(int fd, dictionary_t *query)
   free(body);
 }
 
+/**
+ * @brief Introduce a friend to another friend
+ */
 static void introduceFriend(int fd, dictionary_t *query)
 {
   // Get info from query
@@ -214,29 +223,25 @@ static void introduceFriend(int fd, dictionary_t *query)
   friends = dictionary_get(query, "friend");
   char *host = dictionary_get(query, "host");
   char *port = dictionary_get(query, "port");
-  char **friends_array = split_string(friends, '\n');
 
   // if the user is not registered in the dictionary
   pthread_mutex_lock(&mutex);
   dictionary_t *user_Friends_Dictionary = registerClient(AllClients, user);
   pthread_mutex_unlock(&mutex);
-  int count = 0;
-  while (friends_array[count] != NULL)
-  {
-    char *FriFriends = getFriFriend(host, port, friends_array[count]);
-    printf("Debug FriFriends at introduce from getFriFriend: %s\n", FriFriends);
-    pthread_mutex_lock(&mutex);
-    UpdateUserFriends(FriFriends, user);
-    pthread_mutex_unlock(&mutex);
+  char *FriFriends = getFriFriend(host, port, friends);
 
-    count++;
-  }
+  pthread_mutex_lock(&mutex);
+  UpdateUserFriends(FriFriends, user);
+  pthread_mutex_unlock(&mutex);
 
   char *body = getBody(user_Friends_Dictionary);
 
   WriteResponse(fd, body);
 }
 
+/**
+ * @brief Remove friends from a user
+ */
 static void unFriend(int fd, dictionary_t *query)
 {
   const char *user;
@@ -273,6 +278,14 @@ static void unFriend(int fd, dictionary_t *query)
   free(body);
 }
 
+/**
+ * @brief Register a client in the dictionary if it is not already registered
+ *
+ * @param query: the dictionary that contains all the clients
+ * @param user: the user that wants to be registered
+ *
+ * @return the dictionary of the user
+ */
 static dictionary_t *registerClient(dictionary_t *query, const char *user)
 {
   if (dictionary_get(query, user) == NULL)
@@ -284,6 +297,9 @@ static dictionary_t *registerClient(dictionary_t *query, const char *user)
   return user_Friends_Dictionary;
 }
 
+/**
+ * @brief Write the response to the client
+ */
 static void WriteResponse(int fd, char *body)
 {
   size_t len = strlen(body);
@@ -299,6 +315,12 @@ static void WriteResponse(int fd, char *body)
   Rio_writen(fd, body, len);
 }
 
+/**
+ * @brief Update the friends of a user
+ *
+ * @param newFriends: the new friends that the user wants to add
+ * @param user: the user that wants to add new friends
+ */
 static char *UpdateUserFriends(char *newFriends, const char *user)
 {
   dictionary_t *user_Friends_Dictionary = registerClient(AllClients, user);
@@ -329,6 +351,16 @@ static char *UpdateUserFriends(char *newFriends, const char *user)
   return body;
 }
 
+/**
+ * @brief Get the friends of a friend
+ *
+ * @param host: the host of the friend
+ * @param port: the port of the friend
+ * @param friends: the friend
+ *
+ * @return the friends of the friend
+ *
+ */
 static char *getFriFriend(char *host, char *port, char *friends)
 {
   int connection_fd = open_clientfd(host, port);
@@ -346,20 +378,14 @@ static char *getFriFriend(char *host, char *port, char *friends)
 
   dictionary_t *response = read_requesthdrs(&rio);
   parse_header_line(buf, response);
-  
+
   char *content_length_str = dictionary_get(response, "Content-Length");
   int content_length = atoi(content_length_str);
-  
+
   // pthread_mutex_lock(&mutex);
   char *content = malloc(content_length + 1); // +1 for the null terminator
-  ssize_t num_bytes = rio_readn(connection_fd, content, content_length);
-  if (num_bytes > 0)
-  {
-    content[num_bytes] = '\0'; // Null-terminate the content
-  }
-  // pthread_mutex_unlock(&mutex);
-
-  printf("Debug Content: %s\n", content);
+  rio_readnb(&rio, content, content_length);  // Read the response body
+  content[content_length] = 0;
   close(connection_fd);
   return content;
 }
