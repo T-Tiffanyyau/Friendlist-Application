@@ -20,7 +20,7 @@ static void clienterror(int fd, char *cause, char *errnum,
                         char *shortmsg, char *longmsg);
 static void print_stringdictionary(dictionary_t *d);
 static void serve_request(int fd, dictionary_t *query);
-static void registerClient(dictionary_t *query, const char *user);
+static dictionary_t *registerClient(dictionary_t *query, const char *user);
 static void WriteResponse(int fd, char *body);
 static char *UpdateUserFriends(char *newFriends, const char *user);
 static void getFriFriend(char *host, char *port, char *friends, char **FriFriends);
@@ -28,6 +28,7 @@ static void getFriends(int fd, dictionary_t *query);
 static void beFriends(int fd, dictionary_t *query);
 static void unFriend(int fd, dictionary_t *query);
 static void introduceFriend(int fd, dictionary_t *query);
+static char *getBody(dictionary_t *user_Friends_Dictionary);
 
 pthread_mutex_t mutex;
 static dictionary_t *AllClients;
@@ -171,25 +172,18 @@ void doit(int fd)
 
 static void getFriends(int fd, dictionary_t *query)
 {
-  char *body;
-  char *user;
-  dictionary_t *user_Friends_Dictionary;
-  user = dictionary_get(query, "user");
+  char *user = dictionary_get(query, "user");
 
   pthread_mutex_lock(&mutex);
-  registerClient(AllClients, user);
-  user_Friends_Dictionary = dictionary_get(AllClients, user);
+  dictionary_t *user_Friends_Dictionary = registerClient(AllClients, user);
+  pthread_mutex_unlock(&mutex);
 
   if (user_Friends_Dictionary == NULL)
   {
-    pthread_mutex_unlock(&mutex);
     return;
   }
 
-  print_stringdictionary(user_Friends_Dictionary);
-
-  body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
-  pthread_mutex_unlock(&mutex);
+  char *body = getBody(user_Friends_Dictionary);
 
   WriteResponse(fd, body);
 
@@ -203,7 +197,9 @@ static void beFriends(int fd, dictionary_t *query)
   user = dictionary_get(query, "user");
   friends = dictionary_get(query, "friends");
 
+  pthread_mutex_lock(&mutex);
   char *body = UpdateUserFriends(friends, user);
+  pthread_mutex_unlock(&mutex);
   WriteResponse(fd, body);
 
   free(body);
@@ -221,22 +217,24 @@ static void introduceFriend(int fd, dictionary_t *query)
   char **friends_array = split_string(friends, '\n');
 
   // if the user is not registered in the dictionary
-  registerClient(AllClients, user);
+  pthread_mutex_lock(&mutex);
+  dictionary_t *user_Friends_Dictionary = registerClient(AllClients, user);
+  pthread_mutex_unlock(&mutex);
   int count = 0;
   while (friends_array[count] != NULL)
   {
     char *FriFriends = NULL;
     getFriFriend(host, port, friends_array[count], &FriFriends);
+    pthread_mutex_lock(&mutex);
     UpdateUserFriends(FriFriends, user);
-    free(FriFriends);
+    pthread_mutex_unlock(&mutex);
+
     count++;
   }
-  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
-  char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
+
+  char *body = getBody(user_Friends_Dictionary);
 
   WriteResponse(fd, body);
-
-  free(body);
 }
 
 static void unFriend(int fd, dictionary_t *query)
@@ -248,7 +246,7 @@ static void unFriend(int fd, dictionary_t *query)
   char **friends_array = split_string(friends, '\n');
 
   pthread_mutex_lock(&mutex);
-  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
+  dictionary_t *user_Friends_Dictionary = registerClient(AllClients, user);
   int count = 0;
   while (friends_array[count] != NULL)
   {
@@ -268,19 +266,22 @@ static void unFriend(int fd, dictionary_t *query)
   }
   pthread_mutex_unlock(&mutex);
 
-  char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
+  char *body = getBody(user_Friends_Dictionary);
 
   WriteResponse(fd, body);
 
   free(body);
 }
 
-static void registerClient(dictionary_t *query, const char *user)
+static dictionary_t *registerClient(dictionary_t *query, const char *user)
 {
   if (dictionary_get(query, user) == NULL)
   {
     dictionary_set(query, user, make_dictionary(COMPARE_CASE_SENS, free));
   }
+
+  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
+  return user_Friends_Dictionary;
 }
 
 static void WriteResponse(int fd, char *body)
@@ -300,9 +301,7 @@ static void WriteResponse(int fd, char *body)
 
 static char *UpdateUserFriends(char *newFriends, const char *user)
 {
-  pthread_mutex_lock(&mutex);
-  registerClient(AllClients, user);
-  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
+  dictionary_t *user_Friends_Dictionary = registerClient(AllClients, user);
   char **friends_array = split_string(newFriends, '\n');
 
   int count = 0;
@@ -319,8 +318,8 @@ static char *UpdateUserFriends(char *newFriends, const char *user)
 
     count++;
   }
-  pthread_mutex_unlock(&mutex);
-  char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
+
+  char *body = getBody(user_Friends_Dictionary);
 
   return body;
 }
@@ -354,9 +353,14 @@ static void getFriFriend(char *host, char *port, char *friends, char **FriFriend
   *FriFriends = content;
   printf("FriFriends at getFriFriends: %s\n", *FriFriends);
   close(connection_fd);
-  // free(content);
-  free(friend_encode);
 }
+
+static char *getBody(dictionary_t *user_Friends_Dictionary)
+{
+  char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
+  return body;
+}
+
 /*
  * read_requesthdrs - read HTTP request headers
  */
