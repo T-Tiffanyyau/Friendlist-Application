@@ -112,7 +112,7 @@
 
 (define new-f1 (get-friends user1))
 (define new-f2 (get-friends user2))
-
+  
 (define expected-f1 (set-add orig-f1 user2))
 (define expected-f2 (set-add orig-f2 user1))
 

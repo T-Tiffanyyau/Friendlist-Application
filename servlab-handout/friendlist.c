@@ -22,9 +22,12 @@ static void print_stringdictionary(dictionary_t *d);
 static void serve_request(int fd, dictionary_t *query);
 static void registerClient(dictionary_t *query, const char *user);
 static void WriteResponse(int fd, char *body);
+static char *UpdateUserFriends(char *newFriends, const char *user);
+static void getFriFriend(char *host, char *port, char *friends, char **FriFriends);
 static void getFriends(int fd, dictionary_t *query);
 static void beFriends(int fd, dictionary_t *query);
 static void unFriend(int fd, dictionary_t *query);
+static void introduceFriend(int fd, dictionary_t *query);
 
 pthread_mutex_t mutex;
 static dictionary_t *AllClients;
@@ -143,6 +146,10 @@ void doit(int fd)
       {
         unFriend(fd, query);
       }
+      else if (starts_with("/introduce", uri))
+      {
+        introduceFriend(fd, query);
+      }
       else
       {
         serve_request(fd, query);
@@ -175,6 +182,7 @@ static void getFriends(int fd, dictionary_t *query)
 
   if (user_Friends_Dictionary == NULL)
   {
+    pthread_mutex_unlock(&mutex);
     return;
   }
 
@@ -194,29 +202,37 @@ static void beFriends(int fd, dictionary_t *query)
   char *friends;
   user = dictionary_get(query, "user");
   friends = dictionary_get(query, "friends");
+
+  char *body = UpdateUserFriends(friends, user);
+  WriteResponse(fd, body);
+
+  free(body);
+}
+
+static void introduceFriend(int fd, dictionary_t *query)
+{
+  // Get info from query
+  const char *user;
+  char *friends;
+  user = dictionary_get(query, "user");
+  friends = dictionary_get(query, "friend");
+  char *host = dictionary_get(query, "host");
+  char *port = dictionary_get(query, "port");
   char **friends_array = split_string(friends, '\n');
 
-  pthread_mutex_lock(&mutex);
   // if the user is not registered in the dictionary
   registerClient(AllClients, user);
-  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
-
   int count = 0;
   while (friends_array[count] != NULL)
   {
-    const char *current_Friend = friends_array[count];
-    dictionary_set(user_Friends_Dictionary, current_Friend, NULL);
-
-    // if the friend is not registered in the dictionary
-    registerClient(AllClients, current_Friend);
-
-    dictionary_t *friend_Friends = dictionary_get(AllClients, current_Friend);
-    dictionary_set(friend_Friends, user, NULL);
-
+    char *FriFriends = NULL;
+    getFriFriend(host, port, friends_array[count], &FriFriends);
+    UpdateUserFriends(FriFriends, user);
+    free(FriFriends);
     count++;
   }
+  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
   char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
-  pthread_mutex_unlock(&mutex);
 
   WriteResponse(fd, body);
 
@@ -250,9 +266,9 @@ static void unFriend(int fd, dictionary_t *query)
 
     count++;
   }
+  pthread_mutex_unlock(&mutex);
 
   char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
-  pthread_mutex_unlock(&mutex);
 
   WriteResponse(fd, body);
 
@@ -282,6 +298,65 @@ static void WriteResponse(int fd, char *body)
   Rio_writen(fd, body, len);
 }
 
+static char *UpdateUserFriends(char *newFriends, const char *user)
+{
+  pthread_mutex_lock(&mutex);
+  registerClient(AllClients, user);
+  dictionary_t *user_Friends_Dictionary = dictionary_get(AllClients, user);
+  char **friends_array = split_string(newFriends, '\n');
+
+  int count = 0;
+  while (friends_array[count] != NULL)
+  {
+    const char *current_Friend = friends_array[count];
+    dictionary_set(user_Friends_Dictionary, current_Friend, NULL);
+
+    // if the friend is not registered in the dictionary
+    registerClient(AllClients, current_Friend);
+
+    dictionary_t *friend_Friends = dictionary_get(AllClients, current_Friend);
+    dictionary_set(friend_Friends, user, NULL);
+
+    count++;
+  }
+  pthread_mutex_unlock(&mutex);
+  char *body = join_strings(dictionary_keys(user_Friends_Dictionary), '\n');
+
+  return body;
+}
+
+static void getFriFriend(char *host, char *port, char *friends, char **FriFriends)
+{
+  int connection_fd = open_clientfd(host, port);
+  char *friend_encode = query_encode(friends);
+  char http_request[MAXLINE];
+  sprintf(http_request, "GET /friends?user=%s HTTP/1.0\r\n\r\n", friend_encode); // makes http_request = GET /friends?user=alice HTTP/1.0\r\n\r\n
+  rio_writen(connection_fd, http_request, strlen(http_request));
+
+  char buf[MAXLINE]; // Buffer to store the response
+  rio_t rio;
+  Rio_readinitb(&rio, connection_fd);
+  Rio_readlineb(&rio, buf, MAXLINE); // Read the first line of the response
+
+  dictionary_t *response = read_requesthdrs(&rio);
+  parse_header_line(buf, response);
+  char *content_length_str = dictionary_get(response, "Content-Length");
+  int content_length = atoi(content_length_str);
+
+  char *content = malloc(content_length + 1); // +1 for the null terminator
+  ssize_t num_bytes = rio_readn(connection_fd, content, content_length);
+  if (num_bytes > 0)
+  {
+    content[num_bytes] = '\0'; // Null-terminate the content
+    printf("Content: %s\n", content);
+  }
+
+  *FriFriends = content;
+  printf("FriFriends at getFriFriends: %s\n", *FriFriends);
+  close(connection_fd);
+  // free(content);
+  free(friend_encode);
+}
 /*
  * read_requesthdrs - read HTTP request headers
  */
