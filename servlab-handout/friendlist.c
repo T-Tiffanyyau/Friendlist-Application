@@ -237,6 +237,9 @@ static void introduceFriend(int fd, dictionary_t *query)
   char *body = getBody(user_Friends_Dictionary);
 
   WriteResponse(fd, body);
+
+  free(FriFriends);
+  free(body);
 }
 
 /**
@@ -382,6 +385,10 @@ static char *getFriFriend(char *host, char *port, char *friends)
   rio_readnb(&rio, content, content_length);
   content[content_length] = 0;
   close(connection_fd);
+
+  free(friend_encode);
+  free(content_length_str);
+
   return content;
 }
 
