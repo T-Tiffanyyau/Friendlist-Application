@@ -364,27 +364,22 @@ static char *UpdateUserFriends(char *newFriends, const char *user)
 static char *getFriFriend(char *host, char *port, char *friends)
 {
   int connection_fd = open_clientfd(host, port);
-  pthread_mutex_lock(&mutex);
   char *friend_encode = query_encode(friends);
   char http_request[MAXLINE];
-  sprintf(http_request, "GET /friends?user=%s HTTP/1.0\r\n\r\n", friend_encode); // makes http_request = GET /friends?user=alice HTTP/1.0\r\n\r\n
+  sprintf(http_request, "GET /friends?user=%s HTTP/1.0\r\n\r\n", friend_encode);
   rio_writen(connection_fd, http_request, strlen(http_request));
-  pthread_mutex_unlock(&mutex);
 
-  char buf[MAXLINE]; // Buffer to store the response
+  char buf[MAXLINE];
   rio_t rio;
   Rio_readinitb(&rio, connection_fd);
-  Rio_readlineb(&rio, buf, MAXLINE); // Read the first line of the response
-
+  Rio_readlineb(&rio, buf, MAXLINE); 
   dictionary_t *response = read_requesthdrs(&rio);
   parse_header_line(buf, response);
-
   char *content_length_str = dictionary_get(response, "Content-Length");
   int content_length = atoi(content_length_str);
 
-  // pthread_mutex_lock(&mutex);
-  char *content = malloc(content_length + 1); // +1 for the null terminator
-  rio_readnb(&rio, content, content_length);  // Read the response body
+  char *content = malloc(content_length + 1);
+  rio_readnb(&rio, content, content_length);
   content[content_length] = 0;
   close(connection_fd);
   return content;
