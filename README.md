@@ -17,7 +17,6 @@ A robust web-based friend-graph manager, the Friendlist Application is engineere
 ## Initializing the Server
 
 ```
-bash
 make
 ./friendlist <port>
 ```
