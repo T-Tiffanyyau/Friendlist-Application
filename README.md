@@ -1,28 +1,53 @@
 # Friendlist Application
-A robust web-based friend-graph manager designed to handle dynamic friend relationships over HTTP. Developed using C and a custom server framework, this application offers a practical interface for managing user connections through a web browser.
+
+A robust web-based friend-graph manager, the Friendlist Application is engineered to manage dynamic friend relationships via HTTP. Developed in C with a custom server framework, this application provides an intuitive web interface for effective user connection management.
 
 ## Installation
-Clone the repository: Obtain the latest version from our Git repository.
-Compile the server: Navigate to the project directory and run make to build the application.
-Start the server: Execute ./friendlist <port> where <port> is a number between 1024 and 65535, suitable for your network configuration.
+
+1. **Clone the Repository:** Access the latest version from our Git repository.
+2. **Compile the Server:** Navigate to the project directory and run the `make` command to build the application.
+3. **Start the Server:** Launch the server using `./friendlist <port>`, replacing `<port>` with a suitable number between 1024 and 65535, depending on your network setup.
 
 ## Key Features
-- Dynamic User Management: Automatically registers users and manages friendships as dictated by HTTP requests.
-- Concurrent Connections: Utilizes multithreading to handle multiple clients simultaneously, ensuring high availability and robust error handling.
-- Friendship Operations: Supports complex operations such as adding friends, removing friends, and introducing friends from different servers.
+
+- **Dynamic User Management:** Automates user registration and friendship management based on incoming HTTP requests.
+- **Concurrent Connections:** Employs multithreading to manage multiple client connections simultaneously, ensuring high availability and robust error handling.
+- **Friendship Operations:** Enables complex operations such as adding friends, removing friends, and facilitating friend introductions across servers.
+
+## Initializing the Server
+
+```
+bash
+make
+./friendlist <port>
+```
+Replace <port> with a number between 1024 and 65535. Note that only ports 2100 - 2120 are externally accessible on CADE machines. You can connect to the server using:
+```
+http://localhost:<port>/
+```
+Upon connection, the server initially lists two friends: Alice and Bob. It also outputs any received query parameters.
+
 ## Server Operations
-Get Friends: Retrieve a list of friends for any registered user.
-`curl "http://localhost:8090/friends?user=alice"`
-Befriend: Add one or more users to another user's friend list, automatically reciprocating the friendship.
-`curl "http://localhost:8090/befriend?user=me&friends=alice"`
-Unfriend: Remove one or more users from a user's friend list.
-`curl "http://localhost:8090/unfriend?user=me&friends=alice"`
-Introduce: Facilitate the introduction of users from one server to the users of another server, extending friend networks.
-`curl "http://localhost:8090/introduce?user=me&friend=alice&host=localhost&port=8090"`
+Get Friends: Retrieves a user's friends list.
+```
+curl "http://localhost:8090/friends?user=alice"
+```
+Befriend: Adds users to another user's friends list.
+```
+curl "http://localhost:8090/befriend?user=me&friends=alice"
+```
+Unfriend: Removes users from a user's friends list.
+```
+curl "http://localhost:8090/unfriend?user=me&friends=alice"
+```
+Introduce: Connects users across different servers to expand friend networks.
+```
+curl "http://localhost:8090/introduce?user=me&friend=alice&host=localhost&port=8090"
+```
 ## Technical Highlights
-Thread-Safe Operations: Ensures that all client interactions are thread-safe using mutexes.
-Efficient Data Storage: Uses custom dictionaries for storing user data and relationships.
-Error Handling: Robust error responses for invalid requests, ensuring clarity and continuous server operation.
-## Security and Performance
-Client Isolation: Designed to prevent a single misbehaving client from affecting the server's overall performance.
-Memory Management: Implements efficient memory usage and leak prevention to handle large volumes of data and requests.
+- Thread-Safe Operations: Uses mutexes to ensure all client interactions are secure and reliable.
+- Efficient Data Storage: Leverages custom dictionaries for streamlined user data and relationship management.
+- Error Handling: Delivers robust error responses to invalid requests to maintain clear and continuous server operation.
+- Security and Performance
+- Client Isolation: Designed to isolate and manage misbehaving clients without impacting server performance.
+- Memory Management: Implements strategies for efficient memory use and leak prevention to support extensive data handling and client requests.
