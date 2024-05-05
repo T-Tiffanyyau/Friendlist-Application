@@ -50,3 +50,30 @@ curl "http://localhost:8090/introduce?user=me&friend=alice&host=localhost&port=8
 - Security and Performance
 - Client Isolation: Designed to isolate and manage misbehaving clients without impacting server performance.
 - Memory Management: Implements strategies for efficient memory use and leak prevention to support extensive data handling and client requests.
+## Example Output
+```
+$ curl "http://localhost:8090/befriend?user=me&friends=alice"
+alice
+$ curl "http://localhost:8090/befriend?user=me&friends=alice"
+alice
+$ curl "http://localhost:8090/befriend?user=me&friends=bob"
+alice
+bob
+$ curl "http://localhost:8090/friends?user=alice"
+me
+$ curl "http://localhost:8090/befriend?user=alice&friends=bob%0Acarol"
+me
+bob
+carol
+$ curl "http://localhost:8090/unfriend?user=me&friends=alice"
+bob
+$ curl "http://localhost:8090/introduce?user=me&friend=alice&host=localhost&port=8090"
+$ curl "http://localhost:8090/friends?user=me"
+bob
+carol
+alice
+$ curl "http://localhost:8090/friends?user=alice"
+bob
+carol
+me
+```
