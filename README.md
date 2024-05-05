@@ -12,7 +12,7 @@ Start the server: Execute ./friendlist <port> where <port> is a number between 1
 - Friendship Operations: Supports complex operations such as adding friends, removing friends, and introducing friends from different servers.
 ## Server Operations
 Get Friends: Retrieve a list of friends for any registered user.
-`curl "http://localhost:8090/friends?user=alice"`
+```curl "http://localhost:8090/friends?user=alice"```
 Befriend: Add one or more users to another user's friend list, automatically reciprocating the friendship.
 `curl "http://localhost:8090/befriend?user=me&friends=alice"`
 Unfriend: Remove one or more users from a user's friend list.
